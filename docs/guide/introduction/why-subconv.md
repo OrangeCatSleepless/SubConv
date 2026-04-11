@@ -15,5 +15,5 @@ The subscription and node parsing are aligned with [mihomo](https://github.com/M
 It uses proxy-provider and rule-provider to automatically update the node information and rules. It also supports using this service to proxy the ruleset, so users can get the rules even if they can't access GitHub (the server needs to be able to access GitHub).
 
 ## Easy to Customize
-You can customize the rule sets by modifying the config file.  
+You can customize the rule sets and proxy groups by modifying the template files.  
 It's also easy to do some further modifications by modifying the source code because it's written in Python which is like natural language.  

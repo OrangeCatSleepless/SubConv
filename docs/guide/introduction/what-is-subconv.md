@@ -22,7 +22,7 @@ We provide built-in `zju` and `general` templates, with `zju` used by default.
 - Nodes auto update based on proxy-provider
 - Rules auto update based on rule-provider
 - Support proxy rule-provider to prevent failure to get rules from GitHub
-- Support multiple airpots
+- Support multiple airports
 - Display remaining traffic and total traffic (only useful when you use a single airport, requires your airport and Clash to support it at the same time, Clash for Windows, Clash Verge, Stash, Clash Meta for Android, etc. are known to support it)
 - Expose an API that converts subscriptions into proxy-provider output
 - Support template files
