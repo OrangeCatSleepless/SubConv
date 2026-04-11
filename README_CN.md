@@ -37,7 +37,7 @@
 - `mainpage/`：Vue/Vite 前端
 - `docs/`：VitePress 文档站点，通过 GitHub Pages 独立部署
 
-本地常用命令：
+本地常用命令（需安装 [uv](https://docs.astral.sh/uv/) 和 [bun](https://bun.sh)）：
 
 - 后端：`uv sync` 后，如需自定义运行时参数就创建/修改 `config.yaml`，然后执行 `uv run python api.py`
 - 前端：`cd mainpage && bun install && bun run dev`

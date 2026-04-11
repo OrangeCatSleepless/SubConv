@@ -20,7 +20,7 @@ We ship two built-in templates in the root `template/` directory: `zju.yaml` and
 - Nodes auto update based on proxy-provider
 - Rules auto update based on rule-provider
 - Support proxy rule-provider to prevent failure to get rules from GitHub
-- Support multiple airpots
+- Support multiple airports
 - Display remaining traffic and total traffic (only useful when you use a single airport, requires your airport and Clash to support it at the same time, Clash for Windows, Clash Verge, Stash, Clash Meta for Android, etc. are known to support it)
 - Implement the api of subscription conversion to proxy-provider (normal people won't use it)
 - Support template files
@@ -38,7 +38,7 @@ We ship two built-in templates in the root `template/` directory: `zju.yaml` and
 - `mainpage/`: Vue/Vite frontend
 - `docs/`: VitePress documentation site, deployed separately via GitHub Pages
 
-Local commands:
+Local commands (requires [uv](https://docs.astral.sh/uv/) and [bun](https://bun.sh)):
 
 - Backend: `uv sync`, create/edit `config.yaml` if you need custom runtime settings, then `uv run python api.py`
 - Frontend: `cd mainpage && bun install && bun run dev`
