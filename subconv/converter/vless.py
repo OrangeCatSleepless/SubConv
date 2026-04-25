@@ -141,29 +141,29 @@ def handle_v_share_link(
     if not network:
         network = "tcp"
     fake_type = _query_first(query, "headerType").lower()
-    if fake_type == "http":
+    if network == "tcp" and fake_type == "http":
         network = "http"
     elif network == "http":
         network = "h2"
     proxy["network"] = network
 
     if network == "tcp":
-        if fake_type != "none":
-            headers: dict[str, list[str]] = {}
-            host = _query_first(query, "host")
-            if host:
-                headers["Host"] = [host]
-
-            method = _query_first(query, "method")
-            proxy["http_opts"] = HttpOpts.model_construct(
-                method=method or None,
-                path=[_query_first(query, "path") or "/"],
-                headers=headers,
-            )
+        pass
 
     elif network == "http":
-        # headerType=="http" forces network="http" → outputs h2-opts
-        # (when type=="http" without headerType, network becomes "h2" with no opts)
+        headers: dict[str, list[str]] = {}
+        host = _query_first(query, "host")
+        if host:
+            headers["Host"] = [host]
+
+        method = _query_first(query, "method")
+        proxy["http_opts"] = HttpOpts.model_construct(
+            method=method or None,
+            path=[_query_first(query, "path") or "/"],
+            headers=headers,
+        )
+
+    elif network == "h2":
         h2_path = _query_first(query, "path") or "/"
         h2_host = _query_first(query, "host")
         proxy["h2_opts"] = H2Opts.model_construct(
@@ -234,8 +234,24 @@ def handle_v_share_link(
             headers=None,
             no_grpc_header=_get_typed(extra_opts, "no_grpc_header", bool),
             x_padding_bytes=_get_typed(extra_opts, "x_padding_bytes", str),
+            x_padding_obfs_mode=_get_typed(extra_opts, "x_padding_obfs_mode", bool),
+            x_padding_key=_get_typed(extra_opts, "x_padding_key", str),
+            x_padding_header=_get_typed(extra_opts, "x_padding_header", str),
+            x_padding_placement=_get_typed(extra_opts, "x_padding_placement", str),
+            x_padding_method=_get_typed(extra_opts, "x_padding_method", str),
+            uplink_http_method=_get_typed(extra_opts, "uplink_http_method", str),
+            session_placement=_get_typed(extra_opts, "session_placement", str),
+            session_key=_get_typed(extra_opts, "session_key", str),
+            seq_placement=_get_typed(extra_opts, "seq_placement", str),
+            seq_key=_get_typed(extra_opts, "seq_key", str),
+            uplink_data_placement=_get_typed(extra_opts, "uplink_data_placement", str),
+            uplink_data_key=_get_typed(extra_opts, "uplink_data_key", str),
+            uplink_chunk_size=_get_typed(extra_opts, "uplink_chunk_size", int),
             sc_max_each_post_bytes=_get_typed(
                 extra_opts, "sc_max_each_post_bytes", int
+            ),
+            sc_min_posts_interval_ms=_get_typed(
+                extra_opts, "sc_min_posts_interval_ms", int
             ),
             reuse_settings=_get_typed(extra_opts, "reuse_settings", XhttpReuseSettings),
             download_settings=_get_typed(
@@ -301,6 +317,36 @@ def _parse_xhttp_extra(extra: dict[str, object]) -> dict[str, object]:
     if isinstance(x_padding_bytes, str) and x_padding_bytes:
         opts["x_padding_bytes"] = x_padding_bytes
 
+    for source, target in {
+        "xPaddingKey": "x_padding_key",
+        "xPaddingHeader": "x_padding_header",
+        "xPaddingPlacement": "x_padding_placement",
+        "xPaddingMethod": "x_padding_method",
+        "uplinkHttpMethod": "uplink_http_method",
+        "sessionPlacement": "session_placement",
+        "sessionKey": "session_key",
+        "seqPlacement": "seq_placement",
+        "seqKey": "seq_key",
+        "uplinkDataPlacement": "uplink_data_placement",
+        "uplinkDataKey": "uplink_data_key",
+    }.items():
+        value = extra.get(source)
+        if isinstance(value, str) and value:
+            opts[target] = value
+
+    x_padding_obfs_mode = extra.get("xPaddingObfsMode")
+    if isinstance(x_padding_obfs_mode, bool):
+        opts["x_padding_obfs_mode"] = x_padding_obfs_mode
+
+    for source, target in {
+        "uplinkChunkSize": "uplink_chunk_size",
+        "scMaxEachPostBytes": "sc_max_each_post_bytes",
+        "scMinPostsIntervalMs": "sc_min_posts_interval_ms",
+    }.items():
+        value = extra.get(source)
+        if isinstance(value, (int, float)):
+            opts[target] = int(value)
+
     xmux = extra.get("xmux")
     if isinstance(xmux, dict):
         reuse_settings = _xmux_to_reuse_settings(xmux)
@@ -333,6 +379,10 @@ def _xmux_to_reuse_settings(xmux: dict[str, object]) -> XhttpReuseSettings | Non
         elif isinstance(value, (int, float)):
             kwargs[target] = str(int(value))
 
+    h_keep_alive_period = xmux.get("hKeepAlivePeriod")
+    if isinstance(h_keep_alive_period, (int, float)):
+        kwargs["h_keep_alive_period"] = int(h_keep_alive_period)
+
     if not kwargs:
         return None
     return XhttpReuseSettings.model_validate(kwargs)
@@ -352,24 +402,39 @@ def _parse_xhttp_download_settings(
         kwargs["port"] = int(port)
 
     security = download_settings.get("security")
-    if isinstance(security, str) and security.lower() == "tls":
+    if isinstance(security, str) and security.lower() in {"tls", "reality"}:
         kwargs["tls"] = True
 
-    tls_settings = download_settings.get("tlsSettings")
-    if isinstance(tls_settings, dict):
-        server_name = tls_settings.get("serverName")
-        if isinstance(server_name, str) and server_name:
-            kwargs["servername"] = server_name
+        tls_settings = download_settings.get("tlsSettings")
+        if isinstance(tls_settings, dict):
+            server_name = tls_settings.get("serverName")
+            if isinstance(server_name, str) and server_name:
+                kwargs["servername"] = server_name
 
-        fingerprint = tls_settings.get("fingerprint")
-        if isinstance(fingerprint, str) and fingerprint:
-            kwargs["client_fingerprint"] = fingerprint
+            fingerprint = tls_settings.get("fingerprint")
+            if isinstance(fingerprint, str) and fingerprint:
+                kwargs["client_fingerprint"] = fingerprint
 
-        alpn = tls_settings.get("alpn")
-        if isinstance(alpn, list):
-            alpn_list = [item for item in alpn if isinstance(item, str)]
-            if alpn_list:
-                kwargs["alpn"] = alpn_list
+            alpn = tls_settings.get("alpn")
+            if isinstance(alpn, list):
+                alpn_list = [item for item in alpn if isinstance(item, str)]
+                if alpn_list:
+                    kwargs["alpn"] = alpn_list
+
+            allow_insecure = tls_settings.get("allowInsecure")
+            if isinstance(allow_insecure, bool) and allow_insecure:
+                kwargs["skip_cert_verify"] = True
+
+        if security.lower() == "reality":
+            reality_settings = download_settings.get("realitySettings")
+            if isinstance(reality_settings, dict):
+                public_key = reality_settings.get("publicKey")
+                if isinstance(public_key, str) and public_key:
+                    short_id = reality_settings.get("shortId")
+                    kwargs["reality_opts"] = RealityOpts.model_construct(
+                        public_key=public_key,
+                        short_id=short_id if isinstance(short_id, str) else None,
+                    )
 
     xhttp_settings = download_settings.get("xhttpSettings")
     if isinstance(xhttp_settings, dict):
@@ -381,6 +446,10 @@ def _parse_xhttp_download_settings(
         if isinstance(host, str) and host:
             kwargs["host"] = host
 
+        headers = xhttp_settings.get("headers")
+        if isinstance(headers, dict) and headers:
+            kwargs["headers"] = headers
+
         no_grpc_header = xhttp_settings.get("noGRPCHeader")
         if isinstance(no_grpc_header, bool) and no_grpc_header:
             kwargs["no_grpc_header"] = True
@@ -388,6 +457,15 @@ def _parse_xhttp_download_settings(
         x_padding_bytes = xhttp_settings.get("xPaddingBytes")
         if isinstance(x_padding_bytes, str) and x_padding_bytes:
             kwargs["x_padding_bytes"] = x_padding_bytes
+
+        nested_opts = _parse_xhttp_extra(xhttp_settings)
+        kwargs.update(
+            {
+                key: value
+                for key, value in nested_opts.items()
+                if key != "download_settings"
+            }
+        )
 
         extra = xhttp_settings.get("extra")
         if isinstance(extra, dict):
